@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Player HLS + DASH com Video.js</title>
+
+    <link
+      href="https://vjs.zencdn.net/8.23.4/video-js.css"
+      rel="stylesheet"
+    />
+
+    <style>
+      body {
+        background-color: #111;
+        color: #eee;
+        font-family: sans-serif;
+        text-align: center;
+        padding: 30px;
+      }
+      video {
+        margin-top: 20px;
+        border-radius: 12px;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
+      }
+      button {
+        margin-top: 50px;
+        margin-right: 20px;
+        padding: 10px 20px;
+        font-size: 16px;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+      }
+      button:hover {
+        background-color: #333;
+        color: #fff;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>Player HLS + DASH (Video.js)</h1>
+
+    <video
+      id="my-video"
+      class="video-js vjs-default-skin"
+      controls
+      preload="auto"
+      width="640"
+      height="360"
+      data-setup="{}"
+    ></video>
+
+    <div>
+      <button id="play-hls">Play HLS</button>
+      <button id="play-dash">Play DASH</button>
+    </div>
+
+    <!-- Bibliotecas -->
+    <script src="https://vjs.zencdn.net/8.23.4/video.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/videojs-contrib-dash@latest/dist/videojs-dash.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/videojs-http-streaming@latest/dist/videojs-http-streaming.min.js"></script>
+
+    <!-- Código JS -->
+    <script src="player.js"></script>
+  </body>
+</html>

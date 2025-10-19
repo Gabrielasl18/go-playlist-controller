@@ -1,17 +1,13 @@
 package main
 
 import (
-	"go-playlist-controller/observable"
-	"go-playlist-controller/server"
-	"go-playlist-controller/watcher"
+	"go-playlist-controller/controller"
 	"log"
 )
 
 func main() {
-	go server.StartServer()
-	go observable.StartObservable()
-	go watcher.StartWatching()
+	go controller.StartCycle()
 
-	log.Println("🎬 Sistema iniciado (Server 8080, Observable 8888, Watcher ativo)")
+	log.Println("🎬 Sistema iniciado (Server 8080, Controller unificado ativo)")
 	select {}
 }
