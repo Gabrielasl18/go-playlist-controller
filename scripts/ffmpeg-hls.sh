@@ -3,46 +3,48 @@
 INPUT_FILE="../sea_clip.mp4"
 OUTPUT_DIR="../hls"
 MASTER_PLAYLIST_NAME="master.m3u8"
+CHILD_PLAYLIST_NAME="playlist_1080p.m3u8"
 
+# 1. Verifica se o arquivo existe
 if [ ! -f "$INPUT_FILE" ]; then
     echo "ERRO: O arquivo de entrada não foi encontrado: ${INPUT_FILE}"
     exit 1
 fi
 
+# 2. Cria pasta de saída
 mkdir -p "$OUTPUT_DIR"
 
 echo -e "\n\n-------------------------------------------------------------------"
-echo "Streaming (Live Loop) de ${INPUT_FILE} para HLS MBR (MPEG-TS)."
+echo "Streaming (Live Loop) de ${INPUT_FILE} para HLS (1 resolução)."
 echo "Master Playlist: ${OUTPUT_DIR}/${MASTER_PLAYLIST_NAME}"
-echo "Usando loop infinito e Segmentação por Time (2s)."
-echo "Arquivos de Saída: ${OUTPUT_DIR}"
-echo -e "-------------------------------------------------------------------\n\n"
+echo "Child Playlist:  ${OUTPUT_DIR}/${CHILD_PLAYLIST_NAME}"
+echo "Usando loop infinito e segmentação de 2 segundos."
+echo "-------------------------------------------------------------------\n\n"
 
-# 3. Comando FFmpeg formatado para melhor leitura.
-# Cada linha termina com '\' e SEM ESPAÇOS OU COMENTÁRIOS depois.
-
+# 3. Executa o FFmpeg
 TZ='UTC' ffmpeg \
     -stream_loop -1 -re \
     -i "$INPUT_FILE" \
     -fflags +nobuffer \
-    -filter_complex "[0:v]split=3[v1][v2][v3]; [v1]scale=-2:1080[v1out]; [v2]scale=-2:720[v2out]; [v3]scale=-2:360[v3out]" \
-    -map "[v1out]" -c:v:0 libx264 -x264-params "nal-hrd=cbr:force-cfr=1" -b:v:0 5M -maxrate:v:0 5M -minrate:v:0 5M -bufsize:v:0 10M -preset slow -g 48 -sc_threshold 0 -keyint_min 48 \
-    -map a:0 -c:a:0 aac -b:a:0 96k -ac 2 \
-    -map "[v2out]" -c:v:1 libx264 -x264-params "nal-hrd=cbr:force-cfr=1" -b:v:1 3M -maxrate:v:1 3M -minrate:v:1 3M -bufsize:v:1 6M -preset slow -g 48 -sc_threshold 0 -keyint_min 48 \
-    -map a:0 -c:a:1 aac -b:a:1 96k -ac 2 \
-    -map "[v3out]" -c:v:2 libx264 -x264-params "nal-hrd=cbr:force-cfr=1" -b:v:2 1M -maxrate:v:2 1M -minrate:v:2 1M -bufsize:v:2 2M -preset slow -g 48 -sc_threshold 0 -keyint_min 48 \
-    -map a:0 -c:a:2 aac -b:a:2 48k -ac 2 \
+    -c:v libx264 -preset slow -b:v 4M -maxrate 4M -bufsize 8M -g 48 -sc_threshold 0 -keyint_min 48 \
+    -c:a aac -b:a 128k -ac 2 \
     -f hls \
     -hls_time 2 \
-    -hls_flags independent_segments+program_date_time \
+    -hls_list_size 6 \
+    -hls_flags delete_segments+append_list+omit_endlist+program_date_time+independent_segments \
     -hls_segment_type mpegts \
-    -hls_list_size 3 \
-    -hls_segment_filename "${OUTPUT_DIR}/stream_%v/segment%02d.ts" \
     -master_pl_name "${MASTER_PLAYLIST_NAME}" \
-    -var_stream_map "v:0,a:0,name:1080p v:1,a:1,name:720p v:2,a:2,name:360p" \
-    "${OUTPUT_DIR}/playlist_%v.m3u8"
+    -hls_segment_filename "${OUTPUT_DIR}/segment_%03d.ts" \
+    "${OUTPUT_DIR}/${CHILD_PLAYLIST_NAME}"
+
+# 4. Gera master playlist apontando para a child
+#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-STREAM-INF:BANDWIDTH=4500000,RESOLUTION=1920x1080,NAME="1080p"
+${CHILD_PLAYLIST_NAME}
+EOF
 
 echo -e "\n\n-------------------------------------------------------------------"
 echo "Streaming (Live Loop) encerrado."
-echo "Os arquivos estão localizados em: ${OUTPUT_DIR}"
-echo -e "-------------------------------------------------------------------\n\n"
+echo "Arquivos gerados em: ${OUTPUT_DIR}"
+echo "-------------------------------------------------------------------\n\n"

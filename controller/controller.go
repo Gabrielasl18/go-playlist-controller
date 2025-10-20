@@ -1,22 +1,19 @@
 package controller
 
 import (
-	"bytes" // Mantido caso queira reintroduzir comunicação, mas não usado
+	"bytes"
 	"fmt"
 	"io"
-	"log" // Mantido caso queira reintroduzir comunicação, mas não usado
+	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	go_m3u8 "github.com/globocom/go-m3u8"
 )
 
-// --- Constantes e Estruturas ---
-
-const playlistPath = "./hls/playlist_360p.m3u8"
-
-// observableURL não é mais necessário
+const playlistPath = "../hls/playlist_1080p.m3u8"
 
 type LightEvent struct {
 	Seg    int
@@ -31,25 +28,34 @@ var LightEvents = []LightEvent{
 	{Seg: 20, Color: [3]int{0, 0, 255}, Action: "start", Name: "Luz Azul"},
 }
 
-// --- Lógica do Observable (Consumidor) ---
+var (
+	currentEffect string
+	effectMutex   sync.RWMutex
+)
 
-func playLightEffect(device, action string, color [3]int) {
-	fmt.Printf("💡 EFEITO: Dispositivo: %s | ação=%s | cor=%v\n", device, action, color)
+func playLightEffect(device, action string, color [3]int, name string) string {
+	msg := fmt.Sprintf("💡 EFEITO: Dispositivo=%s | ação=%s | cor=%v | nome=%s\n",
+		device, action, color, name)
+	fmt.Print(msg)
+	return msg
 }
 
-// Função que era o 'checkLightEvents' no observable
-func processMediaSequence(mediaSeq int, device string) {
+func processMediaSequence(mediaSeq int, device string) string {
+	var result string
 	for _, event := range LightEvents {
 		if event.Seg == mediaSeq {
-			playLightEffect(device, event.Action, event.Color)
-			fmt.Printf("[PDT SYNC] atingido em %d\n", mediaSeq)
-			// Chamada repetida no código original, mantida para compatibilidade funcional
-			playLightEffect(device, event.Action, event.Color)
+			result += playLightEffect(device, event.Action, event.Color, event.Name)
 		}
 	}
+	if result == "" {
+		result = fmt.Sprintf("Nenhum efeito no segmento %d\n", mediaSeq)
+	}
+	// Atualiza efeito atual protegido por mutex
+	effectMutex.Lock()
+	currentEffect = result
+	effectMutex.Unlock()
+	return result
 }
-
-// --- Lógica do Watcher (Produtor) ---
 
 func readAndCorrectPlaylist(filename string) (io.ReadCloser, error) {
 	file, err := os.Open(filename)
@@ -60,46 +66,44 @@ func readAndCorrectPlaylist(filename string) (io.ReadCloser, error) {
 
 	contentBytes, err := io.ReadAll(file)
 	if err != nil {
-		return nil, fmt.Errorf("erro ao ler todo o conteúdo do arquivo: %w", err)
+		return nil, fmt.Errorf("erro ao ler todo o conteúdo: %w", err)
 	}
 
-	// Correção de formatação
-	contentString := string(contentBytes)
-	correctedContent := strings.ReplaceAll(contentString, "+0000", "Z")
-
+	correctedContent := strings.ReplaceAll(string(contentBytes), "+0000", "Z")
 	return io.NopCloser(bytes.NewBufferString(correctedContent)), nil
 }
 
-// Função que era o 'extractAndSendPDT' no watcher, agora chama diretamente o processamento
-func extractAndProcessPDT() error {
+func extractMediaSequence() (int, error) {
 	playlistReader, err := readAndCorrectPlaylist(playlistPath)
 	if err != nil {
-		return fmt.Errorf("erro ao preparar playlist: %w", err)
+		return 0, err
 	}
 	defer playlistReader.Close()
 
 	playlist, err := go_m3u8.ParsePlaylist(playlistReader)
 	if err != nil {
-		return fmt.Errorf("erro ao parsear playlist: %w", err)
+		return 0, err
 	}
-
-	mediaSeq := playlist.MediaSequence
-	processMediaSequence(mediaSeq, "sepe_device_id") // ID do dispositivo hardcoded no original
-
-	log.Printf("[Sync] Processado MediaSequence: %d", mediaSeq)
-	return nil
+	return playlist.MediaSequence, nil
 }
 
-// Função de Início do Ciclo (Substitui StartWatching)
 func StartCycle() {
-	log.Println("---------------------------------------------------------")
-	log.Println("[Controller] Monitorando arquivo local do HLS a cada 1s...")
-	log.Println("---------------------------------------------------------")
+	fmt.Println("---------------------------------------------------------")
+	fmt.Println("[Controller] Monitorando playlist a cada 1s...")
+	fmt.Println("---------------------------------------------------------")
 	for {
-		if err := extractAndProcessPDT(); err != nil {
-			log.Printf("[Controller] Erro no processamento do arquivo: %v", err)
+		mediaSeq, err := extractMediaSequence()
+		if err != nil {
+			fmt.Printf("[Controller] Erro ao extrair media sequence: %v\n", err)
+		} else {
+			processMediaSequence(mediaSeq, "sepe_device_id")
 		}
-
 		time.Sleep(1 * time.Second)
 	}
+}
+
+func LightHandler(w http.ResponseWriter, r *http.Request) {
+	effectMutex.RLock()
+	defer effectMutex.RUnlock()
+	w.Write([]byte(currentEffect))
 }
