@@ -1,0 +1,3 @@
+- Ativar o streaming
+- Ligar servidor
+- Testar no chrome
