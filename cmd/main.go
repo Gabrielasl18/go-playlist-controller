@@ -10,10 +10,8 @@ import (
 func main() {
 	port := 8080
 
-	// Serve todo o diretório pai
 	http.Handle("/", http.FileServer(http.Dir("../")))
 
-	// Endpoint para pegar efeito atual das luzes
 	http.HandleFunc("/light", controller.LightHandler)
 
 	go controller.StartCycle()
